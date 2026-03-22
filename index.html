@@ -4,10 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>宝宝取名智能定制系统 | 500套高分好名</title>
-  <!-- 加载核心样式 -->
+  <!-- 移除冲突的 preload，直接引入样式 -->
   <link rel="stylesheet" href="./css/style.css">
-  <!-- 预加载懒加载工具类（低优先级） -->
-  <link rel="preload" href="./js/lazy-utils.js" as="script" fetchpriority="low">
 </head>
 <body>
   <div class="container">
@@ -105,7 +103,7 @@
         <button class="filter-btn" onclick="filterByScore('90-94', this)">90-94分</button>
       </div>
       
-      <!-- 名字列表（虚拟滚动容器） -->
+      <!-- 名字列表（简化虚拟列表，适配静态环境） -->
       <div id="nameList" class="name-list" style="max-height: 400px; overflow-y: auto;"></div>
     </div>
 
@@ -162,6 +160,9 @@
     </div>
   </div>
 
+  <!-- 直接引入工具类和名字数据库，放弃懒加载（适配静态环境） -->
+  <script src="./js/name-db.js"></script>
+  <script src="./js/lazy-utils.js"></script>
   <script>
     // 全局变量初始化
     let selectedCount = 10;
@@ -169,13 +170,49 @@
     let favorites = JSON.parse(localStorage.getItem('nameFavorites')) || [];
     window.selectedSurname = '';
     window.favorites = favorites;
-
-    // 懒加载工具类
-    let lazyUtils;
-    import('./js/lazy-utils.js').then(module => {
-      lazyUtils = module.default;
-      console.log('懒加载工具类加载完成');
-    });
+    // 全局工具类（简化，避免模块导入问题）
+    window.lazyUtils = {
+      // 简化的名字渲染（移除虚拟列表，适配静态环境）
+      renderNameCard: function(nameObj, container) {
+        const fullname = `${window.selectedSurname}${nameObj.name}`;
+        const score = nameObj.score || Math.floor(Math.random() * 9) + 90;
+        const isCollected = window.favorites?.some(f => f.fullname === fullname) || false;
+        
+        const nameCard = document.createElement('div');
+        nameCard.className = 'name-card';
+        nameCard.innerHTML = `
+          <div class="card-header">
+            <span class="name-text">${fullname}</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="score-tag">${score}分</span>
+            </div>
+          </div>
+          <div class="source-tag">${nameObj.source}</div>
+          <div class="meaning-area">
+            <div class="meaning-text">${nameObj.meaning}</div>
+          </div>
+          <button class="collect-btn ${isCollected ? 'collected' : ''}" 
+                  onclick="window.collectName(this, '${fullname}', '${nameObj.source}', '${nameObj.meaning}', ${score})">
+            ${isCollected ? '❤' : '♡'}
+          </button>
+        `;
+        container.appendChild(nameCard);
+      },
+      // 加载动画
+      showLoading: function() {
+        document.getElementById('loadingOverlay').style.display = 'flex';
+      },
+      hideLoading: function() {
+        document.getElementById('loadingOverlay').style.display = 'none';
+      },
+      // 简化的列表渲染（移除虚拟滚动）
+      renderVirtualList: function(container, names) {
+        container.innerHTML = '';
+        names.forEach(name => {
+          this.renderNameCard(name, container);
+        });
+      }
+    };
 
     // 数量选择
     function selectCount(count, btn) {
@@ -248,7 +285,7 @@
         });
       }
       
-      lazyUtils.renderVirtualList(nameList, filteredNames);
+      window.lazyUtils.renderVirtualList(nameList, filteredNames);
     }
 
     // 模态框操作
@@ -260,8 +297,8 @@
       document.getElementById(modalId).style.display = 'none';
     }
 
-    // 生成名字（核心懒加载逻辑）
-    async function generateNames() {
+    // 生成名字（简化懒加载，直接调用本地数据库）
+    function generateNames() {
       const surname = document.getElementById('surname').value.trim();
       const birthDate = document.getElementById('birthDate').value;
       const gender = document.getElementById('gender').value;
@@ -273,11 +310,10 @@
       }
       
       window.selectedSurname = surname;
-      lazyUtils.showLoading();
+      window.lazyUtils.showLoading();
 
       try {
-        // 懒加载名字数据库
-        const { getFilteredNames } = await lazyUtils.loadNameDB();
+        // 直接调用名字数据库，无需异步导入
         let names = getFilteredNames(surname, gender, style);
         
         // 截取指定数量
@@ -288,11 +324,11 @@
           score: Math.floor(Math.random() * 9) + 90
         }));
 
-        // 显示结果并渲染虚拟列表
+        // 显示结果并渲染列表
         const resultArea = document.getElementById('resultArea');
         resultArea.style.display = 'block';
         const nameList = document.getElementById('nameList');
-        lazyUtils.renderVirtualList(nameList, allGeneratedNames);
+        window.lazyUtils.renderVirtualList(nameList, allGeneratedNames);
 
         // 更新收藏区
         updateFavoritesArea();
@@ -300,7 +336,7 @@
         console.error('生成名字失败：', e);
         alert('生成名字失败，请重试！');
       } finally {
-        lazyUtils.hideLoading();
+        window.lazyUtils.hideLoading();
       }
     }
 
